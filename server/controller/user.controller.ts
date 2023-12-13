@@ -3,6 +3,7 @@ import UserModel, { User } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsync } from "../middleware/catchAsyncError";
 import jwt, { Secret } from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 require("dotenv").config();
 
 //Registering the user
@@ -24,15 +25,18 @@ export const registerUser = CatchAsync(
     try {
       const { name, email, password } = req.body;
 
-      const isEmailExist = await UserModel.findOne(email);
+      const isEmailExist = await UserModel.findOne({ email });
       if (isEmailExist) {
         return next(new ErrorHandler("Email already exists", 400));
       }
 
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
       const user: RegistrationLayout = {
         name,
         email,
-        password,
+        password: hashedPassword,
       };
 
       const activationToken = createActivationToken(user);
@@ -40,6 +44,13 @@ export const registerUser = CatchAsync(
       const activationCode = activationToken.activationCode;
 
       const data = { user: { name: user.name }, activationCode };
+
+      // Save user to the database
+      const newUser = await UserModel.create(user);
+
+      res
+        .status(200)
+        .json({ success: true, message: "Registration successful" });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }

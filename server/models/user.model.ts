@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 const emailRegexPattern: RegExp = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
 
 // User interface
+
 export interface User extends Document {
   name: string;
   email: string;
@@ -60,6 +61,7 @@ const userSchema: Schema<User> = new mongoose.Schema(
     },
     role: {
       type: String,
+      enum: ["user", "admin"],
       default: "user",
     },
     isVerified: {
@@ -75,20 +77,26 @@ const userSchema: Schema<User> = new mongoose.Schema(
   { timestamps: true }
 );
 
+userSchema.path("name").validate(function (name: string) {
+  return name.length >= 1;
+}, "Name must have a minimum length of 1.");
+
 //Hashing the password using bcrypt
 userSchema.pre<User>("save", async function (next) {
   if (this.isModified("password")) {
-    next();
+    this.password = await bcrypt.hash(this.password, 10);
   }
-  this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
 //Comparing the ps
-userSchema.methods.comparePassword = async function (
+userSchema.methods.comparePassword = function (
   enteredPassword: string
 ): Promise<boolean> {
-  return await bcrypt.compare(enteredPassword, this.password);
+  if (!this.isVerified) {
+    throw new Error("User email is not verified");
+  }
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
 const UserModel: Model<User> = mongoose.model("User", userSchema);
