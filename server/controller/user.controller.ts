@@ -4,6 +4,9 @@ import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsync } from "../middleware/catchAsyncError";
 import jwt, { Secret } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import path from "path";
+import ejs from "ejs";
+import mailSend from "../utils/mailSender";
 require("dotenv").config();
 
 //Registering the user
@@ -22,35 +25,46 @@ interface ActivationToken {
 
 export const registerUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
+    const { name, email, password } = req.body;
+
+    const isEmailExist = await UserModel.findOne({ email });
+    if (isEmailExist) {
+      return next(new ErrorHandler("Email already exists", 400));
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const user: RegistrationLayout = {
+      name,
+      email,
+      password: hashedPassword,
+    };
+
+    const activationToken = createActivationToken(user);
+
+    const activationCode = activationToken.activationCode;
+
+    const data = { user: { name: user.name }, activationCode };
+
+    const html = await ejs.renderFile(
+      path.join(__dirname, "../mail/activation-mail.ejs"),
+      data
+    );
+
     try {
-      const { name, email, password } = req.body;
+      await mailSend({
+        email: user.email,
+        subject: "Account activation",
+        template: html,
+        data: { name: user.name, activationCode },
+      });
 
-      const isEmailExist = await UserModel.findOne({ email });
-      if (isEmailExist) {
-        return next(new ErrorHandler("Email already exists", 400));
-      }
-
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-      const user: RegistrationLayout = {
-        name,
-        email,
-        password: hashedPassword,
-      };
-
-      const activationToken = createActivationToken(user);
-
-      const activationCode = activationToken.activationCode;
-
-      const data = { user: { name: user.name }, activationCode };
-
-      // Save user to the database
-      const newUser = await UserModel.create(user);
-
-      res
-        .status(200)
-        .json({ success: true, message: "Registration successful" });
+      res.status(200).json({
+        success: true,
+        message: `Activation code sent to your email: ${user.email}`,
+        activationToken: activationToken.token,
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
