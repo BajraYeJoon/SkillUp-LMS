@@ -56,8 +56,8 @@ export const registerUser = CatchAsync(
       await mailSend({
         email: user.email,
         subject: "Account activation",
-        template: html,
-        data: { name: user.name, activationCode },
+        template: "activation-mail.ejs",
+        data,
       });
 
       res.status(200).json({

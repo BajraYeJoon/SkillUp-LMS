@@ -34,7 +34,7 @@ const mailSend = async (options: MailOptions): Promise<void> => {
   const html: string = await ejs.renderFile(templatePath, data);
 
   const mailOptions = {
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_MAIL,
     to: email,
     subject,
     html,
