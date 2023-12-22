@@ -25,46 +25,50 @@ interface ActivationToken {
 
 export const registerUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { name, email, password } = req.body;
-
-    const isEmailExist = await UserModel.findOne({ email });
-    if (isEmailExist) {
-      return next(new ErrorHandler("Email already exists", 400));
-    }
-
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    const user: RegistrationLayout = {
-      name,
-      email,
-      password: hashedPassword,
-    };
-
-    const activationToken = createActivationToken(user);
-
-    const activationCode = activationToken.activationCode;
-
-    const data = { user: { name: user.name }, activationCode };
-
-    const html = await ejs.renderFile(
-      path.join(__dirname, "../mail/activation-mail.ejs"),
-      data
-    );
-
     try {
-      await mailSend({
-        email: user.email,
-        subject: "Account activation",
-        template: "activation-mail.ejs",
-        data,
-      });
+      const { name, email, password } = req.body;
 
-      res.status(200).json({
-        success: true,
-        message: `Activation code sent to your email: ${user.email}`,
-        activationToken: activationToken.token,
-      });
+      const isEmailExist = await UserModel.findOne({ email });
+      if (isEmailExist) {
+        return next(new ErrorHandler("Email already exists", 400));
+      }
+
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      const user: RegistrationLayout = {
+        name,
+        email,
+        password: hashedPassword,
+      };
+
+      const activationToken = createActivationToken(user);
+
+      const activationCode = activationToken.activationCode;
+
+      const data = { user: { name: user.name }, activationCode };
+
+      const html = await ejs.renderFile(
+        path.join(__dirname, "../mail/activation-mail.ejs"),
+        data
+      );
+
+      try {
+        await mailSend({
+          email: user.email,
+          subject: "Account activation",
+          template: "activation-mail.ejs",
+          data,
+        });
+
+        res.status(200).json({
+          success: true,
+          message: `Activation code sent to your email: ${user.email}`,
+          activationToken: activationToken.token,
+        });
+      } catch (error: any) {
+        return next(new ErrorHandler(error.message, 400));
+      }
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
