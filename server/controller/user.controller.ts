@@ -23,6 +23,12 @@ interface ActivationToken {
   activationCode: string;
 }
 
+/**
+ * Registers a new user by creating a user object from the request body,
+ * generating a hashed password, checking for duplicate emails, creating
+ * an activation token, sending an activation email, and returning the
+ * activation token in the response.
+ */
 export const registerUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
