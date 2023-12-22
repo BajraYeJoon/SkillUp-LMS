@@ -23,6 +23,12 @@ interface ActivationToken {
   activationCode: string;
 }
 
+//Activating the User
+interface ActivationResponse {
+  activation_code: string;
+  activation_token: string;
+}
+
 /**
  * Registers a new user by creating a user object from the request body,
  * generating a hashed password, checking for duplicate emails, creating
@@ -63,7 +69,7 @@ export const registerUser = CatchAsync(
         await mailSend({
           email: user.email,
           subject: "Account activation",
-          template: "activation-mail.ejs",
+          template: html,
           data,
         });
 
@@ -89,3 +95,57 @@ export const createActivationToken = (user: any): ActivationToken => {
   });
   return { token, activationCode };
 };
+
+/**
+ * Activates a user account.
+ *
+ * Checks the provided activation code and token, verifies them,
+ * creates a new user if valid, saves to DB,
+ * and returns success response.
+ *
+ * Handles any errors by passing to next error handler.
+ */
+export const activateUser = CatchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { activation_code, activation_token } =
+        req.body as ActivationResponse;
+
+      // if (!activation_code || !activation_token) {
+      //   return next(
+      //     new ErrorHandler("Activation code or token is missing", 400)
+      //   );
+      // }
+
+      const newUser: { user: User; activationCode: string } = jwt.verify(
+        activation_token,
+        process.env.JWT_SECRET as Secret
+      ) as { user: User; activationCode: string };
+
+      if (newUser.activationCode !== activation_code) {
+        return next(new ErrorHandler("Invalid activation code", 400));
+      }
+
+      const { name, email, password } = newUser.user;
+
+      const existUser = await UserModel.findOne({ email });
+      if (existUser) {
+        return next(new ErrorHandler("Email already exists", 400));
+      }
+
+      const user = await UserModel.create({
+        name,
+        email,
+        password,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "User activated successfully",
+        user,
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
